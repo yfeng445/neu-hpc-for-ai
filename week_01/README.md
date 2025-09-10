@@ -3,7 +3,7 @@
 - `rmsnorm`: normalization, used in many places
 - `softmax`: softmax funciton in attention
 - `matmul`: matrix multiplication, used in many places also
-- `forward`: forward pass
+- `forward`: forward pass, including multihead attention and RoPE position encoding, rmsnorm, and matrix multiplication
 - `build_tokenizer`+`encode`: tokenization
 - `generate`, `chat`: generation
 
