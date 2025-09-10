@@ -1,6 +1,17 @@
+##### Transformer algorithm match functions in run.c:
+
+- `rmsnorm`: normalization, used in many places
+- `softmax`: softmax funciton in attention
+- `matmul`: matrix multiplication, used in many places also
+- `forward`: forward pass
+- `build_tokenizer`+`encode`: tokenization
+- `generate`, `chat`: generation
+
 [Single-threaded matrix multiplication](https://github.com/yfeng445/neu-hpc-for-ai/blob/main/week_01/single-threaded.c)
 
 [Multi threaded matrix multiplication](https://github.com/yfeng445/neu-hpc-for-ai/blob/main/week_01/multi-threaded.c)
+
+Speedup:
 
 - 1 thread: 1.985s
 - 2 threads: 1.031s
