@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <time.h>
 
 typedef struct{
     int *A;  
@@ -131,6 +132,26 @@ void loadTest(int p) {
         printMatrix(o.C, o.m, o.n);
         free(o.C); puts("");
     }
+    { // large input test
+        int m = 1000, k = 1000, n = 1000;
+        int *A = malloc((size_t)m * k * sizeof(int));
+        int *B = malloc((size_t)k * n * sizeof(int));
+        for (int i = 0; i < m*k; i++) A[i] = i % 100;
+        for (int i = 0; i < k*n; i++) B[i] = i % 100;
+        Input in = {.A=A, .B=B, .m=m, .k=k, .n=n};
+        Output o = matmul_mt(in, p);
+        printf("6: 1000x1000 * 1000x1000");
+        // printMatrix(o.C, o.m, o.n);
+        free(o.C); puts("");
+        free(A);
+        free(B);
+    }
+}
+
+double now() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
 }
 
 int main(int argc, char **argv) {
@@ -148,6 +169,11 @@ int main(int argc, char **argv) {
     }
 
     printf("Running in %d thread(s).\n\n", p);
+    double t0 = now();
     loadTest(p);
+
+
+
+    printf("Time use: %.3f\n", now()-t0);
     return 0;
 }
