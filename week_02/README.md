@@ -103,8 +103,8 @@
 ##### Chapter 5
 
 1. Yes. Reuse variables in shared memory could reduce global memory bandwidth consumption.
-2. ![2x2 tiling](./img/2.1.png)
-   ![4x4 tiling](./img/2.2.png)
+2. ![2x2 tiling](./img/2.1.jpg)
+   ![4x4 tiling](./img/2.2.jpg)
    global memory bandwidth after tiling = global memory bandwidth / tile width
 3. There are two `__syncthreads()` called in fig 5.9 (line 21 & line 26)
    line 21: RAW problem: data may not updated in all threads
