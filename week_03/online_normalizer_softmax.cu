@@ -55,4 +55,58 @@ __global__ void online_normalizer_softmax(float* X, float* Y, int rows, int cols
     }
 }
 
+int main() {
+    // ---- Hard-coded test input (2 rows × 5 cols) ----
+    const int rows = 2, cols = 5;
+    float hX[rows * cols] = {
+        1.0f,  2.0f,  0.0f, -1.0f,  3.0f,   // row 0
+       -2.0f,  0.0f,  2.0f,  4.0f,  1.0f    // row 1
+    };
+    float hY[rows * cols] = {0};
+
+    // ---- Device buffers ----
+    float *dX = nullptr, *dY = nullptr;
+    cudaMalloc(&dX, sizeof(hX));
+    cudaMalloc(&dY, sizeof(hY));
+
+    cudaMemcpy(dX, hX, sizeof(hX), cudaMemcpyHostToDevice);
+
+    // ---- Launch config ----
+    // One block per row; choose a power-of-two block size for the reduction.
+    // For cols=5, next power of two is 8. (You could also just use 32.)
+    const int bx = 8;                   // or 32/64/etc. if you prefer
+    dim3 grid(rows);
+    dim3 block(bx);
+
+    // Dynamic shared memory: two float arrays of length block.x (smax + ssum)
+    size_t shmem_bytes = 2 * block.x * sizeof(float);
+
+    // ---- Kernel launch ----
+    online_normalizer_softmax<<<grid, block, shmem_bytes>>>(dX, dY, rows, cols);
+
+    // (Optional but recommended) check and sync
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Launch error: %s\n", cudaGetErrorString(err));
+        return 1;
+    }
+    cudaDeviceSynchronize();
+
+    // ---- Copy back & print ----
+    cudaMemcpy(hY, dY, sizeof(hY), cudaMemcpyDeviceToHost);
+
+    printf("Softmax per row (rows=%d, cols=%d):\n", rows, cols);
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            printf("%8.5f ", hY[r * cols + c]);
+        }
+        printf("\n");
+    }
+
+    // ---- Cleanup ----
+    cudaFree(dX);
+    cudaFree(dY);
+    return 0;
+}
+
 
