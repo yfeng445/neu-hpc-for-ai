@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 import modal
 
-app = modal.App("deepseekv3-moe")
+app = modal.App("73755e1e-3e2f-4f6b-8f7b-5f3b3e3c4d2a")
 
 # Source list (MPI backend only)
 SOURCES = [

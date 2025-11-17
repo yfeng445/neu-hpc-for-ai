@@ -20,10 +20,24 @@ __device__ __forceinline__ float warp_max(float v){
     return v;
 }
 
+__host__ __device__ inline
+void compute_block_sizes(int M, int d, int& Br, int& Bc) {
+    int denom = 4 * d;
+    int Bc_tmp = (M + denom - 1) / denom;  // ceil
+    if (Bc_tmp < 1) Bc_tmp = 1;
+    int Br_tmp = (Bc_tmp < d) ? Bc_tmp : d;
+    Bc = Bc_tmp;
+    Br = Br_tmp;
+}
+
 __global__ void flashAttn2_wmma_kernel(
     const float* __restrict__ Q, const float* __restrict__ K, const float* __restrict__ V,
-    float* __restrict__ O, int N, int d, int dv, float scale, int Br, int Bc)
+    float* __restrict__ O, int N, int d, int M)
 {
+    int dv = d;
+    int Br, Bc;
+    compute_block_sizes(M, d, Br, Bc);
+
     const int W       = blockDim.x / 32;
     const int warp_id = threadIdx.x / 32;
     const int lane    = threadIdx.x & 31;
@@ -113,11 +127,9 @@ __global__ void flashAttn2_wmma_kernel(
                         __syncwarp();
                     }
 
-                    // Sblk ← C（row-major），乘 scale，超出 cc 的列清零
                     wmma::store_matrix_sync(Sblk, C, 16, wmma::mem_row_major);
                     for (int t = lane; t < 16*16; t += 32){
-                        if ((t % 16) < cc) Sblk[t] *= scale;
-                        else               Sblk[t]  = 0.0f;
+                        if ((t % 16) >= cc) Sblk[t] = 0.0f;
                     }
                 }
                 __syncthreads();
@@ -222,9 +234,7 @@ extern "C" size_t fa2_forward_smem_bytes(int Br, int Bc, int d, int dv, int bloc
 //================= 前向 launcher ====================
 extern "C" void fa2_forward_wmma(
     const float* d_Q, const float* d_K, const float* d_V, float* d_O,
-    int N, int d, int dv, float scale, int Br, int Bc,
-    dim3 grid, dim3 block, size_t sharedBytes)
+    int N, int d, int M, dim3 grid, dim3 block, size_t sharedBytes)
 {
-    assert((Br%16)==0 && (Bc%16)==0 && (d%16)==0);
-    flashAttn2_wmma_kernel<<<grid, block, sharedBytes>>>(d_Q, d_K, d_V, d_O, N, d, dv, scale, Br, Bc);
+    flashAttn2_wmma_kernel<<<grid, block, sharedBytes>>>(d_Q, d_K, d_V, d_O, N, d, M);
 }

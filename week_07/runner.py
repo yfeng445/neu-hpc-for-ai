@@ -2,7 +2,7 @@
 
 import os, subprocess, modal, shlex, time
 
-app = modal.App("mpi-sweep")
+app = modal.App("73755e1e-3e2f-4f6b-8f7b-5f3b3e3c4d2a")
 
 image = (
     modal.Image.from_registry("pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel")
