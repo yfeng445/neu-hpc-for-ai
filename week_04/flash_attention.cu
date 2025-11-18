@@ -158,11 +158,8 @@ int main() {
     const int N = 32;
     const int d = 32;
     const int size = N * d;
-    const int M = 512;   // SRAM 容量（以 float 个数计）
+    const int M = 512; 
 
-    // ----------------------
-    // 1. 在 host 上分配并初始化 Q, K, V
-    // ----------------------
     float* h_Q = new float[size];
     float* h_K = new float[size];
     float* h_V = new float[size];
@@ -173,73 +170,40 @@ int main() {
             int idx = i * d + j;
             float x = static_cast<float>(idx);
 
-            h_Q[idx] = std::sinf(0.01f * x);           // [-1, 1]
-            h_K[idx] = std::cosf(0.02f * x);           // [-1, 1]，和 Q 不同
-            h_V[idx] = std::sinf(0.03f * x + 0.5f);    // 再一套不同的模式
+            h_Q[idx] = std::sinf(0.01f * x);           
+            h_K[idx] = std::cosf(0.02f * x);          
+            h_V[idx] = std::sinf(0.03f * x + 0.5f);  
         }
     }
 
-    // ----------------------
-    // 2. 在 device 上分配内存
-    // ----------------------
     float *d_Q, *d_K, *d_V, *d_O;
     CHECK_CUDA(cudaMalloc(&d_Q, size * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_K, size * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_V, size * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_O, size * sizeof(float)));
 
-    // ----------------------
-    // 3. 拷贝数据到 GPU
-    // ----------------------
     CHECK_CUDA(cudaMemcpy(d_Q, h_Q, size * sizeof(float), cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemcpy(d_K, h_K, size * sizeof(float), cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemcpy(d_V, h_V, size * sizeof(float), cudaMemcpyHostToDevice));
 
-    // ----------------------
-    // 4. 计算 Br, Bc、grid、shared memory 大小
-    //    注意：这里的公式要和 kernel 里保持一致
-    // ----------------------
-    // 建议你同时把 kernel 里的那一行改成同样带括号的形式：
-    // int Bc = (M + 4*d - 1) / (4*d);
     int Bc = (M + 4 * d - 1) / (4 * d);
     if (Bc < 1) Bc = 1;
     int Br = (Bc < d) ? Bc : d;
 
-    // 每个 block 负责 Br 行，算出需要多少个 blocks
     int num_row_blocks = (N + Br - 1) / Br;
 
     dim3 grid(num_row_blocks);
-    dim3 block(1);  // 当前 kernel 没有用 threadIdx，单线程 block 即可
+    dim3 block(1); 
 
-    // shared memory 需求：
-    // Qs:     Br * d
-    // Ks:     Bc * d
-    // Vs:     Bc * d
-    // m_row:  Br
-    // l_row:  Br
-    // p_row:  Br * d
-    // m_tile: Br
-    // l_tile: Br
-    // p_tile: Br * d
-    //
-    // 总 float 数：
-    //   d * (3*Br + 2*Bc) + 4*Br
     size_t smem_floats = static_cast<size_t>(d) * (3 * Br + 2 * Bc)
                        + static_cast<size_t>(4 * Br);
     size_t smem_bytes = smem_floats * sizeof(float);
 
-    // ----------------------
-    // 5. 启动 kernel
-    // ----------------------
     flash_attention_kernel<<<grid, block, smem_bytes>>>(
         d_Q, d_K, d_V, d_O, N, d, M
     );
     CHECK_CUDA(cudaGetLastError());
     CHECK_CUDA(cudaDeviceSynchronize());
-
-    // ----------------------
-    // 6. 拷回结果并打印
-    // ----------------------
     CHECK_CUDA(cudaMemcpy(h_O, d_O, size * sizeof(float), cudaMemcpyDeviceToHost));
 
     std::printf("Output O (N=32, d=32):\n");
@@ -251,9 +215,6 @@ int main() {
         std::printf("\n");
     }
 
-    // ----------------------
-    // 7. 资源释放
-    // ----------------------
     CHECK_CUDA(cudaFree(d_Q));
     CHECK_CUDA(cudaFree(d_K));
     CHECK_CUDA(cudaFree(d_V));
