@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+- family-names: "Aimuyo"
+  given-names: "Osayamen Jonathan"
+  orcid: "https://orcid.org/0009-0007-3272-1063"
+  email: "osayamen@stanford.edu"
+title: "FlashDMoE"
+date-released: 2025-06-06
+url: "https://github.com/osayamenja/FlashMoE"
