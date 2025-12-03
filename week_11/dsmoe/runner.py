@@ -1,9 +1,10 @@
-# runner.py — MPI-only, stable on restricted containers (no UCX, host staging)
+# runner.py — build helper for DS-MoE + FlashMoE
 # Usage:
-#   modal run runner.py::build_and_run_mpi --np 2 --arch sm_80
+#   modal run runner.py::build_and_run_mpi --backend flash --arch sm_80
 # Optional args:
-#   --np <int>         # number of ranks; default = visible GPU count
-#   --arch sm_80|...   # compute capability (A100=sm_80, RTX30=sm_86, etc.)
+#   --backend flash|mpi   # flash = fused FlashMoE path; mpi = legacy DS-MoE path
+#   --np <int>            # number of ranks; default = visible GPU count
+#   --arch sm_80|...      # compute capability (A100=sm_80, RTX30=sm_86, etc.)
 
 import os
 import subprocess
@@ -12,8 +13,8 @@ import modal
 
 app = modal.App("deepseekv3-moe")
 
-# Source list (MPI backend only)
-SOURCES = [
+# Source lists
+MPI_SOURCES = [
     "utils/gemm.cu",
     "utils/sigmoid.cu",
     "utils/bias_add.cu",
@@ -31,6 +32,12 @@ SOURCES = [
     "main_moe.cpp",
 ]
 
+# FlashMoE adapter build: only host sources; FlashMoE headers provide kernels.
+FLASH_SOURCES = [
+    "moe_fwd.cpp",
+    "main_moe.cpp",
+]
+
 IMAGE = (
     modal.Image.from_registry("pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel")
     .apt_install("build-essential", "openmpi-bin", "libopenmpi-dev")
@@ -42,20 +49,60 @@ def _run(cmd: str, env=None, check=True):
     return subprocess.run(["bash", "-lc", cmd], env=env, check=check)
 
 @app.function(image=IMAGE, timeout=60*60, gpu="A100-40GB:4")
-def build_and_run_mpi(arch: str = "sm_80", out: str = "test_moe", np: int | None = None):
+def build_and_run_mpi(
+    arch: str = "sm_80",
+    out: str = "test_moe",
+    np: int | None = None,
+    backend: str = "flash",
+):
     os.chdir("/workspace/src")
     _run("mkdir -p build")
 
+    backend = backend.lower()
+    if backend not in {"flash", "mpi"}:
+        raise ValueError("backend must be 'flash' or 'mpi'")
+
     # Ensure ep_comm.h include path matches sources
-    if not Path("comm/ep_comm.h").exists():
+    if backend == "mpi" and not Path("comm/ep_comm.h").exists():
         if Path("ep_comm.h").exists():
             _run("mkdir -p comm && cp ep_comm.h comm/ep_comm.h")
         else:
             raise FileNotFoundError("Missing header: neither comm/ep_comm.h nor ep_comm.h present.")
 
-    # Compile (MPI backend only). Use mpicxx as host compiler so mpi.h is found.
+    if backend == "flash":
+        flash_root = Path("../flashmoe/csrc").resolve()
+        flash_inc = flash_root / "include"
+        nvshmem_home = os.environ.get("NVSHMEM_HOME", "/usr/local/nvshmem")
+        nvshmem_lib = Path(nvshmem_home) / "lib"
+
+        # Build FlashMoE adapter; FlashMoE headers are header-only but require NVSHMEM/CUTLASS at link time.
+        nvcc = [
+            "nvcc",
+            "-O3",
+            "-lineinfo",
+            "-std=c++20",
+            f"-arch={arch}",
+            "-Xcompiler",
+            "-fPIC",
+        ]
+        nvcc += [f"-I{flash_inc}", f"-I{flash_root}"]
+        nvcc += FLASH_SOURCES
+
+        # Link NVSHMEM if available; otherwise rely on caller-provided rpath/LD_LIBRARY_PATH.
+        if nvshmem_lib.exists():
+            nvcc += [f"-L{nvshmem_lib}", "-lnvshmem", "-lnvshmem_host", "-lnvshmem_device"]
+        nvcc += ["-lcublas", "-lcudart", "-lcusolver", "-o", f"build/{out}"]
+
+        _run(" ".join(nvcc))
+        _run(f"ls -lh build/{out}")
+
+        # FlashMoE path uses a single-process host launcher by default.
+        _run(f"./build/{out}")
+        return
+
+    # Compile (MPI backend). Use mpicxx as host compiler so mpi.h is found.
     nvcc = ["nvcc", "-O3", "-lineinfo", "-std=c++17", f"-arch={arch}", "-ccbin=mpicxx"]
-    nvcc += SOURCES
+    nvcc += MPI_SOURCES
     nvcc += ["-lmpi", "-o", f"build/{out}"]
     _run(" ".join(nvcc))
     _run(f"ls -lh build/{out}")
