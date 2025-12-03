@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 import modal
 
-app = modal.App("deepseekv3-moe")
+app = modal.App("wk11")
 
 # Source lists
 MPI_SOURCES = [
@@ -49,7 +49,7 @@ def _run(cmd: str, env=None, check=True):
     return subprocess.run(["bash", "-lc", cmd], env=env, check=check)
 
 @app.function(image=IMAGE, timeout=60*60, gpu="A100-40GB:4")
-def build_and_run_mpi(
+def build_and_run(
     arch: str = "sm_80",
     out: str = "test_moe",
     np: int | None = None,
