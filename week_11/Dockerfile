@@ -14,6 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libboost-dev \
  && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libhwloc15 libpciaccess0 \
+ && rm -rf /var/lib/apt/lists/*
+
 # 安装 Kitware 官方仓库的新版 CMake（Ubuntu 22.04 默认 3.22 太旧）
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates gnupg wget && \
